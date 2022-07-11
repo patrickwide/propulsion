@@ -5,109 +5,88 @@ declare_id!("8i4YZYcxNpEZXHDYkhP2Ewv62jZVxvR193H8yb7sxqu1");
 #[program]
 pub mod propulsion {
     use super::*;
-    
-    pub fn setup_platform(
-        ctx: Context<TweetPlatform>
+    pub fn send_propulsion_data(
+        ctx: Context<SendPropulsionData>,
+        category: String, 
+        archive_id: String
     ) -> Result<()> {
-        let tweet = &mut ctx.accounts.tweet;
-        tweet.likes = 0;
-        tweet.message = ("").to_string();
-        Ok(())
-    }
+        let data: &mut Account<PropulsionData> = &mut ctx.accounts.propulsion_data;
+        let author: &Signer = &ctx.accounts.author;
+        let clock: Clock = Clock::get().unwrap();
 
-    pub fn write_tweet(
-        ctx: Context<WriteTweet>,
-        message: String,
-        user_public_key: Pubkey
-    ) -> Result<()> {
-        let tweet = &mut ctx.accounts.tweet;
-
-        if !tweet.message.trim().is_empty() {
-            return err!(Errors::CannotUpdateTweet);
+        if category.trim().is_empty() {
+            return err!(Errors::CategoryIsEmpty);
         }
 
-        if message.trim().is_empty() {
-            return err!(Errors::EmtpyMessage);
+        if category.chars().count() > 50 {
+            return err!(Errors::CategoryIsTooLong);
         }
 
-        tweet.message = message;
-        tweet.likes = 0;
-        tweet.creator = user_public_key;
 
-        Ok(())
-    }
-
-    pub fn like_tweet(
-        ctx: Context<LikeTweet>, 
-        user_liking_tweet: Pubkey
-    ) -> Result<()> {
-        let tweet = &mut ctx.accounts.tweet;
-
-        if tweet.message.trim().is_empty() {
-            return err!(Errors::NotValidTweet);
+        if archive_id.trim().is_empty() {
+            return err!(Errors::ArchiveIdIsEmpty);
         }
 
-        if tweet.likes == 5 {
-            return err!(Errors::ReachedMaxLikes);
+        if archive_id.chars().count() > 50 {
+            return err!(Errors::ArchiveIdIsTooLong);
         }
 
-        let mut iter = tweet.people_who_liked.iter();
-        if iter.any(|&v| v == user_liking_tweet) {
-            return err!(Errors::UserLikedTweet);
-        }
-
-        tweet.likes += 1;
-        tweet.people_who_liked.push(user_liking_tweet);
+        data.author = *author.key;
+        data.timestamp = clock.unix_timestamp;
+        data.category = category;
+        data.archive_id = archive_id;
 
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-pub struct TweetPlatform<'info> {
-    #[account(init, payer = user, space = 9000 )]
-    pub tweet: Account<'info, Tweet>,
+pub struct SendPropulsionData<'info> {
+    #[account(init, payer = author, space = PropulsionData::LEN)]
+    pub propulsion_data: Account<'info, PropulsionData>,
     #[account(mut)]
-    pub user: Signer<'info>,
+    pub author: Signer<'info>,
     pub system_program: Program<'info, System>,
 }
 
-#[derive(Accounts)]
-pub struct WriteTweet<'info> {
-    #[account(mut)]
-    pub tweet: Account<'info, Tweet>,
+#[account]
+pub struct PropulsionData {
+    pub author: Pubkey,
+    pub timestamp: i64,
+    pub category: String,
+    pub archive_id: String, 
 }
 
-#[derive(Accounts)]
-pub struct LikeTweet<'info> {
-    #[account(mut)]
-    pub tweet: Account<'info, Tweet>
+// space 
+const DISCRIMINATOR_LENGTH: usize = 8;
+const PUBLIC_KEY_LENGTH: usize = 32;
+const TIMESTAMP_LENGTH: usize = 8;
+const STRING_LENGTH_PREFIX: usize = 4; // Stores the size of the string.
+const MAX_CATEGORY_LENGTH: usize = 50 * 4; // 50 chars max.
+const MAX_ARCHIVE_ID_LENGTH: usize = 50 * 4; // 50 chars max.
+
+impl PropulsionData {
+    const LEN: usize = DISCRIMINATOR_LENGTH
+        + PUBLIC_KEY_LENGTH // Author.
+        + TIMESTAMP_LENGTH // Timestamp.
+        + STRING_LENGTH_PREFIX + MAX_CATEGORY_LENGTH // Category.
+        + STRING_LENGTH_PREFIX + MAX_ARCHIVE_ID_LENGTH; // Archive_id.
 }
 
-#[account] //An attribute for a data structure representing a Solana account.
-#[derive(Default)]
-pub struct Tweet {
-    message: String,
-    likes: u8,
-    creator: Pubkey,
-    people_who_liked: Vec<Pubkey>, // with  #[derive(Default)] we can assign default values
-}
+// i still think solana is good,everything is an account, like in order for you to create a token you have to create an account to hold the token, developers are using the same idea to hold data, all accounts must be rent exempt, meaning they have to have rent for atleast 2 years, and if the user wants to delete the data they get the money held on this account back  
 
-
+// errors
 #[error_code]
 pub enum Errors {
-    #[msg("Tweet message cannot be updated")]
-    CannotUpdateTweet,
+    #[msg("The provided category should not be empty.")]
+    CategoryIsEmpty,
 
-    #[msg("Message cannot be empty")]
-    EmtpyMessage,
+    #[msg("The provided category should be 50 characters long maximum.")]
+    CategoryIsTooLong,
 
-    #[msg("Cannot receive more than 5 likes")]
-    ReachedMaxLikes,
+    #[msg("The provided archive id should not be empty.")]
+    ArchiveIdIsEmpty,
 
-    #[msg("Cannot like a tweet without a valid message")]
-    NotValidTweet,
-
-    #[msg("User has already liked the tweet")]
-    UserLikedTweet,
+    #[msg("The provided archive id should be 50 characters long maximum.")]
+    ArchiveIdIsTooLong,
 }

@@ -1,13 +1,13 @@
 [features]
 seeds = false
-[programs.devnet]
+[programs.localnet]
 propulsion = "8i4YZYcxNpEZXHDYkhP2Ewv62jZVxvR193H8yb7sxqu1"
 
 [registry]
 url = "https://anchor.projectserum.com"
 
 [provider]
-cluster = "devnet"
+cluster = "localnet"
 wallet = "/home/patrickwide/.config/solana/id.json"
 
 [scripts]
